@@ -1,0 +1,19 @@
+{
+  "name": "redprune",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.2",
+    "dotenv": "^5.0.1",
+    "moment": "^2.22.1",
+    "request": "^2.85.0",
+    "snoowrap": "^1.15.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
