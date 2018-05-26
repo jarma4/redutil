@@ -1,9 +1,64 @@
-var request = require('request'),
-   moment = require('moment'),
-   cheerio = require('cheerio');
+const request = require('request');
+const readline = require('readline');
 
-
+// load in environment variables
 require('dotenv').config();
+
+const rl = readline.createInterface({
+   input: process.stdin,
+   output: process.stdout
+});
+rl.setPrompt('> ');
+rl.prompt();
+
+// first get oauth token
+sendRequest('POST', 'https://www.reddit.com/api/v1/access_token', null)
+.then(body => {
+   var token = JSON.parse(body).access_token;
+
+   // got token, now make call to API
+   sendRequest('GET', 'https://oauth.reddit.com/api/v1/me/friends', token)
+   .then(body => {
+      console.log(`Found ${JSON.parse(body).data.children.length} friends ...`);
+
+      rl.question('Do you want to prune friends? [y/n] ', (answer) => {
+         if(answer == 'y') {
+            // go through friends
+            JSON.parse(body).data.children.forEach(friend=>{
+               var msecinday = 1000*60*60*24;
+               sendRequest('GET', `https://oauth.reddit.com/user/${friend.name}/submitted/?sort=new&limit=1`, token)
+               .then(submissions => {
+                  let results = JSON.parse(submissions);
+                  if ('error' in results || results.data.children.length === 0 || (Date.now() - 1000*results.data.children[0].data.created_utc)/msecinday > 365) {
+                     sendRequest('DELETE', 'https://oauth.reddit.com/api/v1/me/friends/'+friend.name, token)
+                     .then(()=>{
+                        if ('error' in results)
+                           console.log(`*** ${friend.name} no page at all, unfriending`);
+                        else if (results.data.children.length === 0)
+                           console.log(`*** ${friend.name} has no submissions, unfriending`);
+                        else
+                           console.log(`*** ${friend.name} over year since posting, unfriending`);
+                        })
+                     .catch(()=>{
+                        console.log("Error unfriending");
+                     });
+                  }
+               });
+            });
+         } else {
+            rl.prompt();
+            console.log('Ok, wont');
+         }
+         rl.close();
+      });
+   })
+   .catch(err => {
+      console.log(`Problem getting friends: ${err}`);
+   });
+})
+.catch(err => {
+   console.log(`Error getting token: ${err}`);
+});
 
 function sendRequest(method, url, tok){
    return new Promise((resolve, reject)=>{
@@ -11,7 +66,7 @@ function sendRequest(method, url, tok){
          method: method,
          url: url,
          headers: {
-            Authorization: (tok == null)?'Basic ' + new Buffer(process.env.CLIENTID + ':' + process.env.CLIENTSEC).toString('base64'):'bearer ' + tok,
+            Authorization: (tok == null)?'Basic ' + new Buffer.from(process.env.CLIENTID + ':' + process.env.CLIENTSEC).toString('base64'):'bearer ' + tok,
             'User-Agent': 'redprune'
          },
          form: {  // only used when getting token
@@ -29,49 +84,6 @@ function sendRequest(method, url, tok){
       });
    });
 }
-
-// first get oauth token
-sendRequest('POST', 'https://www.reddit.com/api/v1/access_token', null)
-.then(body => {
-   var token = JSON.parse(body).access_token;
-   
-   // got token, now make call to API
-   sendRequest('GET', 'https://oauth.reddit.com/api/v1/me/friends', token)
-   .then(body => {
-      console.log(`Searching ${JSON.parse(body).data.children.length} friends ...`);
-      
-      // go through friends
-      JSON.parse(body).data.children.forEach(friend=>{
-         var msecinday = 1000*60*60*24;
-         sendRequest('GET', `https://oauth.reddit.com/user/${friend.name}/submitted/?sort=new&limit=1`, token)
-         .then(submissions => {
-            let results = JSON.parse(submissions);
-            if ('error' in results || results.data.children.length === 0 || (Date.now() - 1000*results.data.children[0].data.created_utc)/msecinday > 365) {
-               sendRequest('DELETE', 'https://oauth.reddit.com/api/v1/me/friends/'+friend.name, token)
-               .then(()=>{
-                  if ('error' in results)
-                     console.log(`*** ${friend.name} no page at all, unfriending`);
-                  else if (results.data.children.length === 0)
-                     console.log(`*** ${friend.name} has no submissions, unfriending`);
-                  else
-                     console.log(`*** ${friend.name} over year since posting, unfriending`);
-                  })
-               .catch(()=>{
-                  console.log("Error unfriending");
-               });
-            }
-         });
-      });
-   })
-   .catch(err => {
-      console.log(`Problem getting friends: ${err}`);
-   });
-})
-.catch(err => {
-   console.log(`Error getting token: ${err}`);
-});
-
-
 // function getPage (target) {
 //    return new Promise(function (resolve, reject) {
 //       var jar = request.jar();
