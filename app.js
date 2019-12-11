@@ -24,18 +24,18 @@ sendRequest('POST', 'https://www.reddit.com/api/v1/access_token', null)
       rl.question('Do you want to prune friends? [y/n] ', (answer) => {
          if(answer == 'y') {
             // go through friends
-            JSON.parse(body).data.children.forEach(friend=>{
+            JSON.parse(body).data.children.forEach(friend => {
                var msecinday = 1000*60*60*24;
-               sendRequest('GET', `https://oauth.reddit.com/user/${friend.name}/submitted/?sort=new&limit=1`, token)
+               sendRequest('GET', `https://oauth.reddit.com/user/${friend.name}/submitted/?sort=new&limit=5`, token)
                .then(submissions => {
                   let results = JSON.parse(submissions);
-                  if ('error' in results || results.data.children.length === 0 || (Date.now() - 1000*results.data.children[0].data.created_utc)/msecinday > 365) {
+                  if ('error' in results || results.data.children.length === 0 || ((Date.now() - 1000*results.data.children[0].data.created_utc)/msecinday > 365 && !results.data.children[0].data.pinned)) {
                      sendRequest('DELETE', 'https://oauth.reddit.com/api/v1/me/friends/'+friend.name, token)
                      .then(()=>{
                         if ('error' in results)
-                           console.log(`*** ${friend.name} no page at all, unfriending`);
+                           console.log(`--- ${friend.name} no page at all, unfriending`);
                         else if (results.data.children.length === 0)
-                           console.log(`*** ${friend.name} has no submissions, unfriending`);
+                           console.log(`=== ${friend.name} has no submissions, unfriending`);
                         else
                            console.log(`*** ${friend.name} over year since posting, unfriending`);
                         })
