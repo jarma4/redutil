@@ -23,33 +23,50 @@ sendRequest('POST', 'https://www.reddit.com/api/v1/access_token', null)
 
       rl.question('Do you want to prune friends? [y/n] ', (answer) => {
          if(answer == 'y') {
+				let msecinday = 1000*60*60*24;
+				let toBeDeleted = [];
+				let promises = [];
             // go through friends
             JSON.parse(body).data.children.forEach(friend => {
-               var msecinday = 1000*60*60*24;
-               sendRequest('GET', `https://oauth.reddit.com/user/${friend.name}/submitted/?sort=new&limit=5`, token)
+               promises.push(sendRequest('GET', `https://oauth.reddit.com/user/${friend.name}/submitted/?sort=new&limit=5`, token)
                .then(submissions => {
-                  let results = JSON.parse(submissions);
-                  if ('error' in results || results.data.children.length === 0 || ((Date.now() - 1000*results.data.children[0].data.created_utc)/msecinday > 365 && !results.data.children[0].data.pinned)) {
-                     sendRequest('DELETE', 'https://oauth.reddit.com/api/v1/me/friends/'+friend.name, token)
-                     .then(()=>{
-                        if ('error' in results)
-                           console.log(`--- ${friend.name} no page at all, unfriending`);
-                        else if (results.data.children.length === 0)
-                           console.log(`=== ${friend.name} has no submissions, unfriending`);
-                        else
-                           console.log(`*** ${friend.name} over year since posting, unfriending`);
-                        })
-                     .catch(()=>{
-                        console.log("Error unfriending");
-                     });
-                  }
-               });
-            });
+						let results = JSON.parse(submissions);
+						if ('error' in results || results.data.children.length === 0 || ((Date.now() - 1000*results.data.children[0].data.created_utc)/msecinday > 365 && !results.data.children[0].data.pinned)) {
+								toBeDeleted.push(friend.name);
+								if ('error' in results)
+									console.log(`--- ${friend.name} no page at all, unfriending`);
+								else if (results.data.children.length === 0)
+									console.log(`=== ${friend.name} has no submissions, unfriending`);
+								else
+									console.log(`*** ${friend.name} over year since posting, unfriending`);
+						}
+               }));
+				});
+				Promise.all(promises).then(ret=>{
+					console.log(toBeDeleted);
+					rl.question('Do you want to unfriend the above? [y/n] ', answer2 => {
+						if (answer2 == 'y') {
+							toBeDeleted.forEach(name => {
+								sendRequest('DELETE', 'https://oauth.reddit.com/api/v1/me/friends/'+name, token)
+								.then(()=>{
+									console.log(`${name} unfriended`);
+								})
+								.catch(()=>{
+									console.log(`Error unfriending ${name}`);
+								});
+							});
+						} else {
+							rl.prompt();
+							console.log('No one unfriended');
+						}
+						rl.close();
+					});
+				});
          } else {
             rl.prompt();
             console.log('Ok, wont');
+				rl.close();
          }
-         rl.close();
       });
    })
    .catch(err => {
